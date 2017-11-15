@@ -1,0 +1,47 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  vars:
+    stack_name: dswtest
+    region: eu-west-1
+    owner: dwilson
+    ami_id: ami-n0tr34l
+    keyname: key-64
+    snsdest: test@example.org
+
+  tasks:
+  - name: Add SNS topic
+    action: cloudformation
+      stack_name={{ stack_name }}-sns-email-topic
+      state=present
+      region="{{region}}"
+      template=sns-email-topic.json
+    args:
+      template_parameters:
+        AutoScaleSNSTopic: "{{snsdest}}"
+    register: asgsns
+
+  - name: Create Security Groups
+    action: cloudformation
+      stack_name={{ stack_name }}-security-groups
+      state=present
+      region="{{region}}"
+      template=security-groups.json
+    register: secgrp
+
+  - name: Create Webapp
+    action: cloudformation
+      stack_name={{ stack_name }}-webapp
+      state=present
+      region="{{region}}"
+      template=-webapp.json
+    args:
+      template_parameters:
+        Owner: "{{ owner }}"
+        AMIId: "{{ ami_id }}"
+        KeyName: "{{ keyname }}"
+        AppServerFleetSize: 1
+        ASGSNSArn:             "{{ asgsns['stack_outputs']['EmailSNSTopicARN']      }}"
+        WebappSGID:            "{{ secgrp['stack_outputs']['WebappSGID']            }}"
+        ElasticacheClientSGID: "{{ secgrp['stack_outputs']['ElasticacheClientSGID'] }}"
